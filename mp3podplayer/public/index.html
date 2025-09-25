@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Audio Streamer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        input[type="text"] {
+            width: 70%;
+            padding: 10px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .video-info {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            display: none;
+        }
+        .audio-player {
+            width: 100%;
+            margin: 20px 0;
+        }
+        .loading {
+            display: none;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>YouTube Audio Streamer</h1>
+        
+        <div>
+            <input type="text" id="youtubeUrl" placeholder="Paste YouTube URL here...">
+            <button onclick="loadVideo()">Load Audio</button>
+        </div>
+        
+        <div id="loading" class="loading">Loading audio stream...</div>
+        
+        <div id="videoInfo" class="video-info">
+            <h3 id="videoTitle"></h3>
+            <p id="videoAuthor"></p>
+            <p id="videoDuration"></p>
+        </div>
+        
+        <audio id="audioPlayer" class="audio-player" controls style="display: none;">
+            Your browser does not support the audio element.
+        </audio>
+        
+        <div id="error" style="color: red; display: none;"></div>
+    </div>
+
+    <script>
+        async function loadVideo() {
+            const url = document.getElementById('youtubeUrl').value.trim();
+            const loading = document.getElementById('loading');
+            const videoInfo = document.getElementById('videoInfo');
+            const audioPlayer = document.getElementById('audioPlayer');
+            const errorDiv = document.getElementById('error');
+            
+            // Reset UI
+            errorDiv.style.display = 'none';
+            videoInfo.style.display = 'none';
+            audioPlayer.style.display = 'none';
+            loading.style.display = 'block';
+            
+            if (!url) {
+                showError('Please enter a YouTube URL');
+                return;
+            }
+            
+            try {
+                // First get video info
+                const infoResponse = await fetch(`/info?url=${encodeURIComponent(url)}`);
+                if (!infoResponse.ok) {
+                    const error = await infoResponse.json();
+                    throw new Error(error.error);
+                }
+                
+                const videoInfoData = await infoResponse.json();
+                
+                // Display video info
+                document.getElementById('videoTitle').textContent = videoInfoData.title;
+                document.getElementById('videoAuthor').textContent = `By: ${videoInfoData.author}`;
+                document.getElementById('videoDuration').textContent = `Duration: ${formatDuration(videoInfoData.duration)}`;
+                videoInfo.style.display = 'block';
+                
+                // Set up audio player with stream URL
+                const streamUrl = `/stream?url=${encodeURIComponent(url)}`;
+                audioPlayer.src = streamUrl;
+                audioPlayer.style.display = 'block';
+                
+                // Hide loading
+                loading.style.display = 'none';
+                
+            } catch (error) {
+                loading.style.display = 'none';
+                showError(error.message);
+            }
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        function formatDuration(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+        
+        // Allow pressing Enter to load video
+        document.getElementById('youtubeUrl').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                loadVideo();
+            }
+        });
+    </script>
+</body>
+</html>
