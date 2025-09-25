@@ -24,6 +24,7 @@
             margin-right: 10px;
             border: 1px solid #ddd;
             border-radius: 5px;
+            font-size: 16px;
         }
         button {
             padding: 10px 20px;
@@ -32,6 +33,7 @@
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            font-size: 16px;
         }
         button:hover {
             background-color: #0056b3;
@@ -54,92 +56,168 @@
         .loading {
             display: none;
             color: #007bff;
+            text-align: center;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+            margin: 10px 0;
+        }
+        .success {
+            color: #155724;
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+            margin: 10px 0;
+        }
+        .examples {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>YouTube Audio Streamer</h1>
+        <p>Stream YouTube audio directly in your browser</p>
         
         <div>
-            <input type="text" id="youtubeUrl" placeholder="Paste YouTube URL here...">
-            <button onclick="loadVideo()">Load Audio</button>
+            <input type="text" id="youtubeUrl" placeholder="Paste YouTube URL here (e.g., https://www.youtube.com/watch?v=...)">
+            <button onclick="loadVideo()" id="loadBtn">Load Audio</button>
         </div>
         
-        <div id="loading" class="loading">Loading audio stream...</div>
+        <div id="loading" class="loading">
+            <div>Loading audio stream...</div>
+            <div style="font-size: 14px; margin-top: 5px;">This may take a few seconds</div>
+        </div>
+        
+        <div id="success" class="success"></div>
+        <div id="error" class="error"></div>
         
         <div id="videoInfo" class="video-info">
             <h3 id="videoTitle"></h3>
-            <p id="videoAuthor"></p>
-            <p id="videoDuration"></p>
+            <p><strong>Author:</strong> <span id="videoAuthor"></span></p>
+            <p><strong>Duration:</strong> <span id="videoDuration"></span></p>
+            <p><strong>Views:</strong> <span id="videoViews"></span></p>
         </div>
         
         <audio id="audioPlayer" class="audio-player" controls style="display: none;">
             Your browser does not support the audio element.
         </audio>
         
-        <div id="error" style="color: red; display: none;"></div>
+        <div class="examples">
+            <p><strong>Example URLs:</strong></p>
+            <ul>
+                <li>https://www.youtube.com/watch?v=VIDEO_ID</li>
+                <li>https://youtu.be/VIDEO_ID</li>
+                <li>https://www.youtube.com/watch?v=VIDEO_ID&list=...</li>
+            </ul>
+            <p><strong>Note:</strong> Some videos may not be available due to regional restrictions or privacy settings.</p>
+        </div>
     </div>
 
     <script>
         async function loadVideo() {
             const url = document.getElementById('youtubeUrl').value.trim();
+            const loadBtn = document.getElementById('loadBtn');
             const loading = document.getElementById('loading');
             const videoInfo = document.getElementById('videoInfo');
             const audioPlayer = document.getElementById('audioPlayer');
             const errorDiv = document.getElementById('error');
+            const successDiv = document.getElementById('success');
             
             // Reset UI
             errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
             videoInfo.style.display = 'none';
             audioPlayer.style.display = 'none';
+            loadBtn.disabled = true;
+            loadBtn.textContent = 'Loading...';
             loading.style.display = 'block';
             
             if (!url) {
                 showError('Please enter a YouTube URL');
+                loadBtn.disabled = false;
+                loadBtn.textContent = 'Load Audio';
+                loading.style.display = 'none';
                 return;
             }
             
             try {
-                // First get video info
+                // Test server connection first
+                await fetch('/health');
+                
+                // Get video info
                 const infoResponse = await fetch(`/info?url=${encodeURIComponent(url)}`);
+                
                 if (!infoResponse.ok) {
-                    const error = await infoResponse.json();
-                    throw new Error(error.error);
+                    const errorData = await infoResponse.json();
+                    throw new Error(errorData.error || `HTTP error! status: ${infoResponse.status}`);
                 }
                 
                 const videoInfoData = await infoResponse.json();
                 
                 // Display video info
                 document.getElementById('videoTitle').textContent = videoInfoData.title;
-                document.getElementById('videoAuthor').textContent = `By: ${videoInfoData.author}`;
-                document.getElementById('videoDuration').textContent = `Duration: ${formatDuration(videoInfoData.duration)}`;
+                document.getElementById('videoAuthor').textContent = videoInfoData.author;
+                document.getElementById('videoDuration').textContent = formatDuration(videoInfoData.duration);
+                document.getElementById('videoViews').textContent = numberWithCommas(videoInfoData.viewCount);
                 videoInfo.style.display = 'block';
                 
                 // Set up audio player with stream URL
-                const streamUrl = `/stream?url=${encodeURIComponent(url)}`;
+                const streamUrl = `/stream?url=${encodeURIComponent(url)}&t=${Date.now()}`;
                 audioPlayer.src = streamUrl;
                 audioPlayer.style.display = 'block';
                 
-                // Hide loading
-                loading.style.display = 'none';
+                // Show success message
+                showSuccess('Audio stream loaded successfully!');
                 
             } catch (error) {
-                loading.style.display = 'none';
+                console.error('Error:', error);
                 showError(error.message);
+            } finally {
+                loading.style.display = 'none';
+                loadBtn.disabled = false;
+                loadBtn.textContent = 'Load Audio';
             }
         }
         
         function showError(message) {
             const errorDiv = document.getElementById('error');
-            errorDiv.textContent = message;
+            errorDiv.innerHTML = `<strong>Error:</strong> ${message}`;
             errorDiv.style.display = 'block';
+            
+            // Scroll to error
+            errorDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function showSuccess(message) {
+            const successDiv = document.getElementById('success');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
         }
         
         function formatDuration(seconds) {
-            const minutes = Math.floor(seconds / 60);
-            const remainingSeconds = seconds % 60;
-            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            if (hours > 0) {
+                return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            } else {
+                return `${minutes}:${secs.toString().padStart(2, '0')}`;
+            }
+        }
+        
+        function numberWithCommas(x) {
+            return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
         }
         
         // Allow pressing Enter to load video
@@ -147,6 +225,16 @@
             if (e.key === 'Enter') {
                 loadVideo();
             }
+        });
+        
+        // Audio player event listeners
+        document.getElementById('audioPlayer').addEventListener('error', function(e) {
+            console.error('Audio player error:', e);
+            showError('Audio playback error. The video might not be available for streaming.');
+        });
+        
+        document.getElementById('audioPlayer').addEventListener('canplay', function() {
+            console.log('Audio can play');
         });
     </script>
 </body>
